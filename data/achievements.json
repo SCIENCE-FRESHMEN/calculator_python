@@ -1,0 +1,102 @@
+{
+  "calc_beginner": {
+    "unlocked": false,
+    "unlocked_at": null,
+    "title": "计算新手",
+    "description": "完成10次计算",
+    "category": "calculator",
+    "icon": "🔢"
+  },
+  "calc_pro": {
+    "unlocked": false,
+    "unlocked_at": null,
+    "title": "计算高手",
+    "description": "完成100次计算",
+    "category": "calculator",
+    "icon": "🧮"
+  },
+  "calc_master": {
+    "unlocked": false,
+    "unlocked_at": null,
+    "title": "计算大师",
+    "description": "完成1000次计算",
+    "category": "calculator",
+    "icon": "🏆"
+  },
+  "twentyfour_first_win": {
+    "unlocked": true,
+    "unlocked_at": "2025-10-13T19:19:10.790417",
+    "title": "首胜！",
+    "description": "第一次解决二十四点问题",
+    "category": "twentyfour",
+    "icon": "🥇"
+  },
+  "twentyfour_50_wins": {
+    "unlocked": false,
+    "unlocked_at": null,
+    "title": "二十四点达人",
+    "description": "解决50个二十四点问题",
+    "category": "twentyfour",
+    "icon": "🌟"
+  },
+  "snake_first_game": {
+    "unlocked": true,
+    "unlocked_at": "2025-10-11T18:02:19.773380",
+    "title": "蛇的诞生",
+    "description": "第一次玩贪吃蛇游戏",
+    "category": "snake",
+    "icon": "🐍"
+  },
+  "snake_100_score": {
+    "unlocked": false,
+    "unlocked_at": null,
+    "title": "蛇的成长",
+    "description": "贪吃蛇游戏中获得100分",
+    "category": "snake",
+    "icon": "📈"
+  },
+  "tetris_first_game": {
+    "unlocked": true,
+    "unlocked_at": "2025-10-11T18:04:27.539041",
+    "title": "方块入门",
+    "description": "第一次玩俄罗斯方块游戏",
+    "category": "tetris",
+    "icon": "🧱"
+  },
+  "quickmath_10_correct": {
+    "unlocked": true,
+    "unlocked_at": "2025-10-13T19:21:41.720173",
+    "title": "速算小能手",
+    "description": "速算挑战中获得10个正确答案",
+    "category": "quickmath",
+    "icon": "⚡"
+  },
+  "quickmath_100_correct": {
+    "unlocked": false,
+    "unlocked_at": null,
+    "title": "速算大师",
+    "description": "速算挑战中获得100个正确答案",
+    "category": "quickmath",
+    "icon": "🏅"
+  },
+  "all_games_played": {
+    "unlocked": true,
+    "unlocked_at": "2025-10-11T18:04:27.539041",
+    "title": "游戏探索者",
+    "description": "玩过所有类型的游戏",
+    "category": "general",
+    "icon": "🎮"
+  },
+  "stats": {
+    "calculator_uses": 0,
+    "calculator_total_operations": 0,
+    "twentyfour_games_played": 39,
+    "twentyfour_games_won": 1,
+    "snake_games_played": 3,
+    "snake_high_score": 0,
+    "tetris_games_played": 1,
+    "tetris_high_score": 0,
+    "quickmath_games_played": 5,
+    "quickmath_correct_answers": 15
+  }
+}
