@@ -59,33 +59,58 @@ python main.py
 
 
 children_calculator/
+
 ├── core/                  # 核心功能模块
+
 │   ├── calculator_engine.py  # 计算器引擎
+
 │   ├── validator.py          # 输入验证
+
 │   ├── history_manager.py    # 历史记录管理
+
 │   └── achievement_system.py # 成就系统
+
 ├── games/                 # 游戏模块
+
 │   ├── tetris_game.py      # 俄罗斯方块
+
 │   ├── twenty_four_game.py # 二十四点
+
 │   ├── snake_game.py       # 贪吃蛇
+
 │   └── quick_math.py       # 速算挑战
+
 ├── view/                  # 视图模块
+
 │   ├── main_window.py      # 主窗口
+
 │   ├── calculator_widget.py # 计算器界面
+
 │   ├── game_widgets.py     # 游戏界面
+
 │   └── components/         # UI组件
+
 ├── viewmodel/             # 视图模型
+
 ├── data/                  # 数据存储
+
 │   ├── history.json        # 计算历史
+
 │   └── achievements.json   # 成就数据
+
 ├── tests/                 # 测试代码
+
 ├── resources/             # 资源文件
 │   ├── images/
+
 │   └── sounds/
+
 ├── config.py              # 配置文件
+
 ├── main.py                # 入口文件
+
 └── requirements.txt       # 依赖列表
-```
+
 
 🛠️ 配置
 
