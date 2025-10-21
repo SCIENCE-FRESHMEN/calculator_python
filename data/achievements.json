@@ -90,13 +90,13 @@
   "stats": {
     "calculator_uses": 0,
     "calculator_total_operations": 0,
-    "twentyfour_games_played": 39,
-    "twentyfour_games_won": 1,
+    "twentyfour_games_played": 77,
+    "twentyfour_games_won": 6,
     "snake_games_played": 3,
     "snake_high_score": 0,
     "tetris_games_played": 1,
     "tetris_high_score": 0,
-    "quickmath_games_played": 5,
-    "quickmath_correct_answers": 15
+    "quickmath_games_played": 7,
+    "quickmath_correct_answers": 23
   }
 }

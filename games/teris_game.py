@@ -4,16 +4,13 @@ import os
 import json
 from typing import List, Tuple, Dict, Optional, Set, Union
 import time
-
 # 初始化pygame
 pygame.init()
-
 # 游戏常量
 GRID_WIDTH = 10
 GRID_HEIGHT = 20
 CELL_SIZE = 30
 FPS = 60
-
 # 颜色定义
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -1135,6 +1132,101 @@ def main():
     # 退出游戏
     pygame.quit()
 
+
+class TetrisGame:
+    """俄罗斯方块游戏核心类，管理游戏状态和主逻辑"""
+
+    def __init__(self):
+        self.board = GameBoard(GRID_WIDTH, GRID_HEIGHT)
+        self.current_piece = None
+        self.next_piece = None
+        self.game_over = False
+        self.score = 0
+        self.level = 1
+        self.lines_cleared = 0
+        self.fall_time = 0
+        self.fall_speed = 1000  # 初始下落速度（毫秒）
+
+        # 初始化游戏
+        self.reset()
+
+    def reset(self):
+        """重置游戏状态"""
+        self.board.reset()
+        self.current_piece = Tetromino()
+        self.next_piece = Tetromino()
+        self.game_over = False
+        self.score = 0
+        self.level = 1
+        self.lines_cleared = 0
+        self.fall_speed = 1000
+
+    def new_piece(self):
+        """生成新方块"""
+        self.current_piece = self.next_piece
+        self.next_piece = Tetromino()
+
+        # 检查新方块是否与已有方块碰撞（游戏结束条件）
+        if self.board.check_collision(self.current_piece):
+            self.game_over = True
+
+    def move_left(self):
+        """向左移动方块"""
+        if not self.game_over:
+            self.current_piece.x -= 1
+            if self.board.check_collision(self.current_piece):
+                self.current_piece.x += 1  # 碰撞则恢复原位
+
+    def move_right(self):
+        """向右移动方块"""
+        if not self.game_over:
+            self.current_piece.x += 1
+            if self.board.check_collision(self.current_piece):
+                self.current_piece.x -= 1  # 碰撞则恢复原位
+
+    def move_down(self):
+        """向下移动方块"""
+        if not self.game_over:
+            self.current_piece.y += 1
+            if self.board.check_collision(self.current_piece):
+                self.current_piece.y -= 1  # 碰撞则恢复原位
+                # 锁定方块并生成新方块
+                self.board.lock_tetromino(self.current_piece)
+                self.clear_lines()
+                self.new_piece()
+                return True  # 表示已锁定
+        return False
+
+    def rotate(self):
+        """旋转方块（带墙壁踢调整）"""
+        if not self.game_over:
+            # 尝试旋转，使用墙壁踢调整位置
+            dx, dy = self.current_piece.try_wall_kick(self.board)
+            if dx != 0 or dy != 0:
+                # 旋转成功（已通过墙壁踢调整）
+                self.current_piece.rotate()
+
+    def clear_lines(self):
+        """清除已满的行并更新分数"""
+        lines = self.board.clear_lines()
+        if lines > 0:
+            self.lines_cleared += lines
+            # 计分规则：1行=100分，2行=300分，3行=500分，4行=800分
+            line_scores = [0, 100, 300, 500, 800]
+            self.score += line_scores[lines] * self.level
+
+            # 每消除10行升级一次
+            self.level = self.lines_cleared // 10 + 1
+            # 升级后加快下落速度（最低100毫秒）
+            self.fall_speed = max(100, 1000 - (self.level - 1) * 100)
+
+    def update(self, delta_time):
+        """更新游戏状态（处理自动下落）"""
+        if not self.game_over:
+            self.fall_time += delta_time
+            if self.fall_time >= self.fall_speed:
+                self.move_down()
+                self.fall_time = 0
 
 if __name__ == "__main__":
     main()

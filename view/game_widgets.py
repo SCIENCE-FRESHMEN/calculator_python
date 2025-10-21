@@ -2,12 +2,14 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QLineEdit, QGridLayout, QMessageBox,
                              QSlider, QGroupBox, QFormLayout, QFrame, QScrollArea)
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QRect, QPoint
-from PyQt5.QtGui import QFont, QPainter, QBrush, QColor, QPen, QKeyEvent
+from PyQt5.QtGui import QFont, QPainter, QBrush, QColor, QPen, QKeyEvent, QImage, QPixmap
 import sys
 import random
+import pygame  # 新增：确保导入pygame
 from games.twenty_four_game import TwentyFourGame
 from games.snake_game import SnakeGame
 from games.quick_math import QuickMathGame
+from games.teris_game import TetrisGame  # 修正：正确导入俄罗斯方块类
 
 
 class GameBaseWidget(QWidget):
@@ -17,7 +19,7 @@ class GameBaseWidget(QWidget):
     def __init__(self, achievement_system, parent=None):
         super().__init__(parent)
         self.achievement_system = achievement_system
-        self.init_ui()
+        self.init_ui()  # 父类初始化时调用UI初始化
 
     def init_ui(self):
         """初始化UI，由子类实现"""
@@ -62,7 +64,7 @@ class TwentyFourGameWidget(GameBaseWidget):
     def __init__(self, achievement_system, parent=None):
         self.game = TwentyFourGame()
         self.current_numbers = []
-        super().__init__(achievement_system, parent)
+        super().__init__(achievement_system, parent)  # 调用父类初始化
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -262,13 +264,20 @@ class TwentyFourGameWidget(GameBaseWidget):
 
 
 class SnakeGameWidget(GameBaseWidget):
-    """贪吃蛇游戏界面"""
+    """贪吃蛇游戏界面（已修复父类初始化问题）"""
 
     def __init__(self, achievement_system, parent=None):
+        # 1. 初始化自身属性
         self.game = SnakeGame(width=20, height=15)
         self.timer = QTimer()
-        self.timer.timeout.connect(self.update_game)
+        self.timer_interval = 200  # 初始速度（毫秒/帧）
+        self.game.need_check = False  # 关闭验证，直接启动
+
+        # 2. 关键修复：调用父类初始化方法（必须在属性初始化后调用）
         super().__init__(achievement_system, parent)
+
+        # 3. 连接定时器信号（在父类初始化后执行）
+        self.timer.timeout.connect(self.update_game)
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -279,333 +288,231 @@ class SnakeGameWidget(GameBaseWidget):
         header_layout = self.create_game_header("数学贪吃蛇")
         main_layout.addLayout(header_layout)
 
-        # 状态区域
+        # 状态区域（分数、长度）
         status_layout = QHBoxLayout()
-
         self.score_label = QLabel("分数: 0")
-        self.score_label.setFont(QFont("Arial", 14, QFont.Bold))
+        self.length_label = QLabel("长度: 1")
+        self.score_label.setFont(QFont("Arial", 14))
+        self.length_label.setFont(QFont("Arial", 14))
         status_layout.addWidget(self.score_label)
-
-        self.level_label = QLabel("等级: 1")
-        self.level_label.setFont(QFont("Arial", 14, QFont.Bold))
-        status_layout.addWidget(self.level_label)
-
         status_layout.addStretch(1)
-
-        self.start_btn = QPushButton("开始游戏")
-        self.start_btn.setFont(QFont("Arial", 14))
-        self.start_btn.setStyleSheet("""
-            background-color: #2ecc71;
-            color: white;
-            border-radius: 5px;
-            padding: 5px 15px;
-        """)
-        self.start_btn.clicked.connect(self.start_game)
-
-        self.reset_btn = QPushButton("重置游戏")
-        self.reset_btn.setFont(QFont("Arial", 14))
-        self.reset_btn.setStyleSheet("""
-            background-color: #e74c3c;
-            color: white;
-            border-radius: 5px;
-            padding: 5px 15px;
-        """)
-        self.reset_btn.clicked.connect(self.reset_game)
-
-        status_layout.addWidget(self.start_btn)
-        status_layout.addWidget(self.reset_btn)
-
+        status_layout.addWidget(self.length_label)
         main_layout.addLayout(status_layout)
 
-        # 游戏区域
-        self.game_area = QFrame()
-        self.game_area.setStyleSheet("background-color: #2c3e50; border-radius: 10px;")
-        self.game_area.setMinimumSize(600, 450)
-        main_layout.addWidget(self.game_area)
+        # Pygame画布（关键：将Pygame画面嵌入PyQt）
+        self.game_canvas = QFrame()
+        self.game_canvas.setFixedSize(
+            self.game.grid_width * 25,  # 每个格子25像素
+            self.game.grid_height * 25
+        )
+        self.game_canvas.setStyleSheet("background-color: #f0f0f0; border: 2px solid #333;")
+        main_layout.addWidget(self.game_canvas)
 
-        # 控制说明
-        controls_layout = QHBoxLayout()
+        # 控制按钮
+        control_layout = QHBoxLayout()
+        self.start_btn = QPushButton("开始游戏")
+        self.pause_btn = QPushButton("暂停")
+        self.reset_btn = QPushButton("重置")
+        for btn in [self.start_btn, self.pause_btn, self.reset_btn]:
+            btn.setFont(QFont("Arial", 14))
+            control_layout.addWidget(btn)
+        self.start_btn.clicked.connect(self.start_game)
+        self.pause_btn.clicked.connect(self.pause_game)
+        self.reset_btn.clicked.connect(self.reset_game)
+        main_layout.addLayout(control_layout)
 
-        controls_label = QLabel("使用方向键控制蛇的移动 | 吃到食物后请解答数学题")
-        controls_label.setFont(QFont("Arial", 12))
-        controls_layout.addWidget(controls_label)
-
-        main_layout.addLayout(controls_layout)
-
-        # 数学题对话框（初始隐藏）
-        self.math_dialog = QFrame()
-        self.math_dialog.setStyleSheet("background-color: white; border-radius: 10px; padding: 20px;")
-        self.math_dialog.setVisible(False)
-        math_layout = QVBoxLayout(self.math_dialog)
-
-        self.math_question_label = QLabel("")
-        self.math_question_label.setFont(QFont("Arial", 16, QFont.Bold))
-        math_layout.addWidget(self.math_question_label)
-
-        math_input_layout = QHBoxLayout()
-        math_input_label = QLabel("答案: ")
-        math_input_label.setFont(QFont("Arial", 14))
-
-        self.math_answer_input = QLineEdit()
-        self.math_answer_input.setFont(QFont("Arial", 14))
-        self.math_answer_input.setStyleSheet("padding: 5px; border-radius: 5px;")
-        self.math_answer_input.returnPressed.connect(self.check_math_answer)
-
-        self.math_submit_btn = QPushButton("提交")
-        self.math_submit_btn.setFont(QFont("Arial", 14))
-        self.math_submit_btn.setStyleSheet("""
-            background-color: #3498db;
-            color: white;
-            border-radius: 5px;
-            padding: 5px 15px;
-        """)
-        self.math_submit_btn.clicked.connect(self.check_math_answer)
-
-        math_input_layout.addWidget(math_input_label)
-        math_input_layout.addWidget(self.math_answer_input)
-        math_input_layout.addWidget(self.math_submit_btn)
-        math_layout.addLayout(math_input_layout)
-
-        main_layout.addWidget(self.math_dialog)
-
-        # 初始化游戏
-        self.reset_game()
+        # 初始化Pygame
+        pygame.init()
+        self.game_surface = pygame.Surface(
+            (self.game.grid_width * 25, self.game.grid_height * 25)
+        )
 
     def start_game(self):
-        """开始游戏"""
-        if not self.game.game_over:
-            self.timer.start(int(self.game.speed * 1000))
-            self.start_btn.setText("暂停")
-            self.start_btn.clicked.disconnect()
-            self.start_btn.clicked.connect(self.pause_game)
-        else:
-            self.reset_game()
-            self.start_game()
+        self.game.running = True
+        self.timer.start(self.timer_interval)
 
     def pause_game(self):
-        """暂停游戏"""
-        self.timer.stop()
-        self.start_btn.setText("继续")
-        self.start_btn.clicked.disconnect()
-        self.start_btn.clicked.connect(self.start_game)
+        self.game.running = not self.game.running
+        if self.game.running:
+            self.timer.start(self.timer_interval)
+        else:
+            self.timer.stop()
 
     def reset_game(self):
-        """重置游戏"""
-        self.timer.stop()
         self.game.reset()
         self.score_label.setText(f"分数: {self.game.score}")
-        self.level_label.setText(f"等级: {self.game.level}")
-        self.start_btn.setText("开始游戏")
-        self.start_btn.clicked.disconnect()
-        self.start_btn.clicked.connect(self.start_game)
-        self.math_dialog.setVisible(False)
-        self.update()
+        self.length_label.setText(f"长度: {self.game.snake_length}")
+        self.timer.start(self.timer_interval)
 
     def update_game(self):
-        """更新游戏状态"""
-        moved = self.game.move()
-        if not moved and self.game.game_over:
-            self.timer.stop()
-            QMessageBox.information(self, "游戏结束", f"游戏结束! 你的分数是: {self.game.score}")
-            # 更新成就系统
-            self.achievement_system.update_stat("snake_games_played")
-            self.achievement_system.update_stat("snake_high_score", self.game.score, is_increment=False)
+        """更新游戏状态并绘制到PyQt组件"""
+        if self.game.running:
+            self.game.update()  # 更新游戏逻辑
+            self.score_label.setText(f"分数: {self.game.score}")
+            self.length_label.setText(f"长度: {self.game.snake_length}")
 
-        # 检查是否需要显示数学题
-        if self.game.waiting_for_math_answer:
-            self.timer.stop()
-            self.math_question_label.setText(self.game.math_question)
-            self.math_answer_input.clear()
-            self.math_dialog.setVisible(True)
-            self.math_answer_input.setFocus()
-
-        # 更新分数和等级显示
-        self.score_label.setText(f"分数: {self.game.score}")
-        self.level_label.setText(f"等级: {self.game.level}")
-
-        # 重绘游戏区域
-        self.update()
-
-    def check_math_answer(self):
-        """检查数学题答案"""
-        user_answer = self.math_answer_input.text().strip()
-        if self.game.check_math_answer(user_answer):
-            self.math_dialog.setVisible(False)
-            # 继续游戏
-            self.timer.start(int(self.game.speed * 1000))
-            # 更新成就系统
-            self.achievement_system.update_stat("quickmath_correct_answers")
-        else:
-            QMessageBox.warning(self, "答案错误", "答案不正确，请再试一次!")
-            self.math_answer_input.clear()
-            self.math_answer_input.setFocus()
-
-    def paintEvent(self, event):
-        """绘制游戏元素"""
-        if not hasattr(self, 'game_area'):
-            return
-
-        painter = QPainter(self)
-        game_rect = self.game_area.geometry()
-
-        # 计算每个格子的大小
-        cell_width = game_rect.width() // self.game.width
-        cell_height = game_rect.height() // self.game.height
-
-        # 绘制蛇
-        for i, (x, y) in enumerate(self.game.snake):
-            # 蛇头颜色不同
-            color = QColor(46, 204, 113) if i == 0 else QColor(39, 174, 96)
-            painter.setBrush(QBrush(color))
-            painter.setPen(QPen(Qt.NoPen))
-            painter.drawRect(
-                game_rect.x() + x * cell_width,
-                game_rect.y() + y * cell_height,
-                cell_width - 1,  # 减1是为了看到格子间的间隙
-                cell_height - 1
-            )
-
-        # 绘制食物
-        food_x, food_y = self.game.food_position
-        painter.setBrush(QBrush(QColor(231, 76, 60)))
-        painter.drawRect(
-            game_rect.x() + food_x * cell_width,
-            game_rect.y() + food_y * cell_height,
-            cell_width - 1,
-            cell_height - 1
+        # 绘制Pygame画面
+        self.game.draw(self.game_surface)  # 假设SnakeGame有draw方法
+        # 转换Pygame表面为PyQt图像
+        w, h = self.game_surface.get_size()
+        q_image = QImage(
+            self.game_surface.get_buffer().raw,
+            w, h, QImage.Format_RGB32
         )
+        pixmap = QPixmap.fromImage(q_image)
 
-        # 在食物上显示数字
-        painter.setPen(QPen(QColor(255, 255, 255)))
-        painter.setFont(QFont("Arial", 12, QFont.Bold))
-        text = str(self.game.food_value)
-        text_rect = painter.boundingRect(
-            game_rect.x() + food_x * cell_width,
-            game_rect.y() + food_y * cell_height,
-            cell_width - 1,
-            cell_height - 1,
-            Qt.AlignCenter,
-            text
-        )
-        painter.drawText(text_rect, Qt.AlignCenter, text)
+        # 绘制到Qt组件
+        painter = QPainter(self.game_canvas)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
 
-    def keyPressEvent(self, event):
-        """处理键盘事件"""
-        if event.key() == Qt.Key_Left and self.game.direction != (1, 0):
-            self.game.change_direction((-1, 0))
-        elif event.key() == Qt.Key_Right and self.game.direction != (-1, 0):
-            self.game.change_direction((1, 0))
-        elif event.key() == Qt.Key_Up and self.game.direction != (0, 1):
-            self.game.change_direction((0, -1))
-        elif event.key() == Qt.Key_Down and self.game.direction != (0, -1):
-            self.game.change_direction((0, 1))
-        elif event.key() == Qt.Key_Space:
-            if self.timer.isActive():
-                self.pause_game()
-            else:
-                self.start_game()
-        else:
-            super().keyPressEvent(event)
+    def keyPressEvent(self, event: QKeyEvent):
+        """处理键盘事件（方向键控制）"""
+        if event.key() == Qt.Key_Left:
+            self.game.change_direction("LEFT")
+        elif event.key() == Qt.Key_Right:
+            self.game.change_direction("RIGHT")
+        elif event.key() == Qt.Key_Up:
+            self.game.change_direction("UP")
+        elif event.key() == Qt.Key_Down:
+            self.game.change_direction("DOWN")
+        super().keyPressEvent(event)
 
 
 class TetrisGameWidget(GameBaseWidget):
-    """俄罗斯方块游戏界面（简化版）"""
+    """俄罗斯方块游戏界面"""
 
     def __init__(self, achievement_system, parent=None):
-        super().__init__(achievement_system, parent)
-        # 这里只是一个占位实现，完整实现需要更复杂的逻辑
-        self.score = 0
-        self.init_ui()
+        self.game = TetrisGame()  # 初始化俄罗斯方块引擎
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_game)
+        super().__init__(achievement_system, parent)  # 调用父类初始化
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(15)
         main_layout.setContentsMargins(20, 20, 20, 20)
 
-        # 添加标题栏
-        header_layout = self.create_game_header("数学俄罗斯方块")
+        # 标题栏
+        header_layout = self.create_game_header("俄罗斯方块")
         main_layout.addLayout(header_layout)
 
-        # 状态区域
-        status_layout = QHBoxLayout()
+        # 主游戏区和信息区
+        content_layout = QHBoxLayout()
 
+        # 游戏画布（Pygame嵌入）
+        self.game_canvas = QFrame()
+        self.canvas_width = self.game.board.width * 30  # 每个格子30像素
+        self.canvas_height = self.game.board.height * 30
+        self.game_canvas.setFixedSize(self.canvas_width, self.canvas_height)
+        self.game_canvas.setStyleSheet("background-color: #000; border: 2px solid #666;")
+        content_layout.addWidget(self.game_canvas)
+
+        # 右侧信息区（分数、下一个方块）
+        info_layout = QVBoxLayout()
         self.score_label = QLabel("分数: 0")
-        self.score_label.setFont(QFont("Arial", 14, QFont.Bold))
-        status_layout.addWidget(self.score_label)
+        self.level_label = QLabel("等级: 1")
+        for lbl in [self.score_label, self.level_label]:
+            lbl.setFont(QFont("Arial", 16, QFont.Bold))
+            lbl.setStyleSheet("color: #333; margin: 10px 0;")
+            info_layout.addWidget(lbl)
+        info_layout.addStretch(1)
+        content_layout.addLayout(info_layout)
 
-        status_layout.addStretch(1)
+        main_layout.addLayout(content_layout)
 
-        self.start_btn = QPushButton("开始游戏")
-        self.start_btn.setFont(QFont("Arial", 14))
-        self.start_btn.setStyleSheet("""
-            background-color: #2ecc71;
-            color: white;
-            border-radius: 5px;
-            padding: 5px 15px;
-        """)
+        # 控制按钮
+        control_layout = QHBoxLayout()
+        self.start_btn = QPushButton("开始")
+        self.pause_btn = QPushButton("暂停")
+        self.reset_btn = QPushButton("重置")
+        for btn in [self.start_btn, self.pause_btn, self.reset_btn]:
+            btn.setFont(QFont("Arial", 14))
+            control_layout.addWidget(btn)
         self.start_btn.clicked.connect(self.start_game)
-
-        self.reset_btn = QPushButton("重置游戏")
-        self.reset_btn.setFont(QFont("Arial", 14))
-        self.reset_btn.setStyleSheet("""
-            background-color: #e74c3c;
-            color: white;
-            border-radius: 5px;
-            padding: 5px 15px;
-        """)
+        self.pause_btn.clicked.connect(self.pause_game)
         self.reset_btn.clicked.connect(self.reset_game)
+        main_layout.addLayout(control_layout)
 
-        status_layout.addWidget(self.start_btn)
-        status_layout.addWidget(self.reset_btn)
-
-        main_layout.addLayout(status_layout)
-
-        # 游戏区域
-        self.game_area = QFrame()
-        self.game_area.setStyleSheet("background-color: #2c3e50; border-radius: 10px;")
-        self.game_area.setMinimumSize(600, 450)
-
-        # 临时提示文本
-        temp_layout = QVBoxLayout(self.game_area)
-        temp_label = QLabel("俄罗斯方块游戏正在开发中...\n完成一行会出现数学题，答对可获得额外分数!")
-        temp_label.setFont(QFont("Arial", 16))
-        temp_label.setStyleSheet("color: white; text-align: center;")
-        temp_label.setAlignment(Qt.AlignCenter)
-        temp_layout.addWidget(temp_label)
-
-        main_layout.addWidget(self.game_area)
-
-        # 控制说明
-        controls_label = QLabel("使用方向键控制方块: ← → 移动, ↑ 旋转, ↓ 加速下落")
-        controls_label.setFont(QFont("Arial", 12))
-        main_layout.addWidget(controls_label)
+        # 初始化Pygame
+        pygame.init()
+        self.game_surface = pygame.Surface((self.canvas_width, self.canvas_height))
 
     def start_game(self):
-        """开始游戏"""
-        QMessageBox.information(self, "开发中", "俄罗斯方块游戏正在开发中，敬请期待!")
-        # 更新成就系统
-        self.achievement_system.update_stat("tetris_games_played")
+        self.game.paused = False
+        self.timer.start(int(self.game.fall_speed * 1000))  # 根据游戏速度调整定时器
+
+    def pause_game(self):
+        self.game.toggle_pause()
+        if self.game.paused:
+            self.timer.stop()
+        else:
+            self.timer.start(int(self.game.fall_speed * 1000))
 
     def reset_game(self):
-        """重置游戏"""
-        self.score = 0
-        self.score_label.setText(f"分数: {self.score}")
+        self.game.reset()
+        self.score_label.setText(f"分数: {self.game.score}")
+        self.level_label.setText(f"等级: {self.game.level}")
+        self.timer.start(int(self.game.fall_speed * 1000))
+
+    def update_game(self):
+        """更新游戏状态并绘制"""
+        if not self.game.paused and not self.game.game_over:
+            self.game.update(100)  # 更新游戏逻辑（传入毫秒数）
+            self.score_label.setText(f"分数: {self.game.score}")
+            self.level_label.setText(f"等级: {self.game.level}")
+            # 随等级提升加快速度
+            self.timer.setInterval(int(self.game.fall_speed * 1000))
+
+        # 绘制游戏画面
+        self.game_surface.fill((0, 0, 0))  # 黑色背景
+        self.game.board.draw(self.game_surface)  # 绘制游戏板
+        if self.game.current_piece:
+            self.game.current_piece.draw(self.game_surface)  # 绘制当前方块
+
+        # 转换为PyQt图像并显示
+        w, h = self.game_surface.get_size()
+        q_image = QImage(
+            self.game_surface.get_buffer().raw,
+            w, h, QImage.Format_RGB32
+        )
+        pixmap = QPixmap.fromImage(q_image)
+
+        painter = QPainter(self.game_canvas)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
+
+    def keyPressEvent(self, event: QKeyEvent):
+        """处理键盘事件（方向键、空格等）"""
+        if self.game.game_over:
+            return
+        if event.key() == Qt.Key_Left:
+            self.game.move_left()
+        elif event.key() == Qt.Key_Right:
+            self.game.move_right()
+        elif event.key() == Qt.Key_Down:
+            self.game.move_down()
+        elif event.key() == Qt.Key_Up:
+            self.game.rotate()  # 旋转
+        elif event.key() == Qt.Key_Space:
+            while self.game.move_down():  # 硬降（一直下落直到碰撞）
+                pass
+        super().keyPressEvent(event)
 
 
 class QuickMathGameWidget(GameBaseWidget):
     """速算挑战游戏界面"""
 
     def __init__(self, achievement_system, parent=None):
-        self.game = QuickMathGame()
-        self.correct_count = 0
-        self.incorrect_count = 0
-        self.timer = QTimer()
-        self.time_remaining = 60  # 60秒
-        super().__init__(achievement_system, parent)
+        self.game = QuickMathGame()  # 导入速算游戏核心逻辑
+        self.timer = QTimer()  # 用于计时
+        self.time_left = 10  # 初始答题时间（秒）
+        self.score = 0  # 当前分数
+        super().__init__(achievement_system, parent)  # 调用父类初始化
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(15)
+        main_layout.setSpacing(20)
         main_layout.setContentsMargins(20, 20, 20, 20)
 
         # 添加标题栏
@@ -647,70 +554,86 @@ class QuickMathGameWidget(GameBaseWidget):
         self.difficulty_buttons[0].setChecked(True)
         self.game.set_difficulty(1)
 
-        # 状态区域
-        status_layout = QHBoxLayout()
+        # 计时区域
+        timer_layout = QHBoxLayout()
+        self.timer_label = QLabel(f"剩余时间: {self.time_left}秒")
+        self.timer_label.setFont(QFont("Arial", 14, QFont.Bold))
+        self.timer_label.setStyleSheet("color: #e74c3c;")
+        timer_layout.addWidget(self.timer_label)
 
-        self.score_label = QLabel("正确: 0 | 错误: 0")
+        self.score_label = QLabel(f"当前分数: {self.score}")
         self.score_label.setFont(QFont("Arial", 14, QFont.Bold))
-        status_layout.addWidget(self.score_label)
+        timer_layout.addStretch(1)
+        timer_layout.addWidget(self.score_label)
+        main_layout.addLayout(timer_layout)
 
-        self.time_label = QLabel(f"剩余时间: {self.time_remaining}秒")
-        self.time_label.setFont(QFont("Arial", 14, QFont.Bold))
-        self.time_label.setStyleSheet("color: #e74c3c;")
-        status_layout.addWidget(self.time_label)
+        # 问题显示区域
+        self.question_frame = QFrame()
+        self.question_frame.setStyleSheet("background-color: white; border-radius: 10px; padding: 20px;")
+        question_layout = QHBoxLayout(self.question_frame)
 
-        status_layout.addStretch(1)
+        self.question_label = QLabel("点击开始按钮开始游戏")
+        self.question_label.setFont(QFont("Arial", 24, QFont.Bold))
+        self.question_label.setAlignment(Qt.AlignCenter)
+        question_layout.addWidget(self.question_label)
+        main_layout.addWidget(self.question_frame)
 
-        self.start_btn = QPushButton("开始挑战")
+        # 答案输入区域
+        input_layout = QVBoxLayout()
+
+        input_label = QLabel("请输入答案:")
+        input_label.setFont(QFont("Arial", 14))
+        input_layout.addWidget(input_label)
+
+        self.answer_input = QLineEdit()
+        self.answer_input.setFont(QFont("Arial", 16))
+        self.answer_input.setStyleSheet("padding: 10px; border-radius: 5px; border: 2px solid #bdc3c7;")
+        self.answer_input.returnPressed.connect(self.check_answer)  # 回车提交
+        input_layout.addWidget(self.answer_input)
+
+        main_layout.addLayout(input_layout)
+
+        # 按钮区域
+        buttons_layout = QHBoxLayout()
+
+        self.start_btn = QPushButton("开始游戏")
         self.start_btn.setFont(QFont("Arial", 14))
         self.start_btn.setStyleSheet("""
             background-color: #2ecc71;
             color: white;
             border-radius: 5px;
-            padding: 5px 15px;
+            padding: 10px;
+            margin-right: 10px;
         """)
         self.start_btn.clicked.connect(self.start_game)
 
-        status_layout.addWidget(self.start_btn)
-        main_layout.addLayout(status_layout)
-
-        # 问题区域
-        self.question_frame = QFrame()
-        self.question_frame.setStyleSheet("background-color: white; border-radius: 10px; padding: 20px;")
-        question_layout = QVBoxLayout(self.question_frame)
-
-        self.question_label = QLabel("点击开始挑战")
-        self.question_label.setFont(QFont("Arial", 32, QFont.Bold))
-        self.question_label.setAlignment(Qt.AlignCenter)
-        question_layout.addWidget(self.question_label)
-
-        main_layout.addWidget(self.question_frame)
-
-        # 输入区域
-        input_layout = QHBoxLayout()
-
-        self.answer_input = QLineEdit()
-        self.answer_input.setFont(QFont("Arial", 24))
-        self.answer_input.setStyleSheet("padding: 10px; border-radius: 5px; border: 2px solid #bdc3c7;")
-        self.answer_input.setAlignment(Qt.AlignCenter)
-        self.answer_input.returnPressed.connect(self.check_answer)
-        self.answer_input.setEnabled(False)
-
-        self.submit_btn = QPushButton("提交")
-        self.submit_btn.setFont(QFont("Arial", 18))
+        self.submit_btn = QPushButton("提交答案")
+        self.submit_btn.setFont(QFont("Arial", 14))
         self.submit_btn.setStyleSheet("""
-            background-color: #3498db;
+            background-color: #f39c12;
             color: white;
             border-radius: 5px;
-            padding: 10px 20px;
-            margin-left: 10px;
+            padding: 10px;
+            margin-right: 10px;
         """)
         self.submit_btn.clicked.connect(self.check_answer)
-        self.submit_btn.setEnabled(False)
+        self.submit_btn.setEnabled(False)  # 初始禁用
 
-        input_layout.addWidget(self.answer_input)
-        input_layout.addWidget(self.submit_btn)
-        main_layout.addLayout(input_layout)
+        self.next_btn = QPushButton("下一题")
+        self.next_btn.setFont(QFont("Arial", 14))
+        self.next_btn.setStyleSheet("""
+            background-color: #9b59b6;
+            color: white;
+            border-radius: 5px;
+            padding: 10px;
+        """)
+        self.next_btn.clicked.connect(self.generate_new_question)
+        self.next_btn.setEnabled(False)  # 初始禁用
+
+        buttons_layout.addWidget(self.start_btn)
+        buttons_layout.addWidget(self.submit_btn)
+        buttons_layout.addWidget(self.next_btn)
+        main_layout.addLayout(buttons_layout)
 
         # 反馈区域
         self.feedback_label = QLabel("")
@@ -719,98 +642,73 @@ class QuickMathGameWidget(GameBaseWidget):
         self.feedback_label.setStyleSheet("min-height: 30px;")
         main_layout.addWidget(self.feedback_label)
 
-        # 定时器设置
+        # 计时器逻辑
         self.timer.timeout.connect(self.update_timer)
 
     def set_difficulty(self, difficulty: int):
         """设置游戏难度"""
         self.game.set_difficulty(difficulty)
-        # 更新按钮状态
         for i, btn in enumerate(self.difficulty_buttons):
             btn.setChecked(i + 1 == difficulty)
 
     def start_game(self):
-        """开始速算挑战"""
-        self.correct_count = 0
-        self.incorrect_count = 0
-        self.time_remaining = 60
-        self.score_label.setText(f"正确: {self.correct_count} | 错误: {self.incorrect_count}")
-        self.time_label.setText(f"剩余时间: {self.time_remaining}秒")
-        self.feedback_label.setText("")
-
-        # 生成第一个问题
-        self.generate_new_question()
-
-        # 启用输入
-        self.answer_input.setEnabled(True)
-        self.submit_btn.setEnabled(True)
-        self.answer_input.clear()
-        self.answer_input.setFocus()
-
-        # 开始计时
-        self.timer.start(1000)  # 每秒更新一次
-
-        # 更新按钮状态
+        """开始游戏"""
+        self.score = 0
+        self.score_label.setText(f"当前分数: {self.score}")
         self.start_btn.setEnabled(False)
-        self.start_btn.setText("挑战中...")
-
-        # 更新成就系统
+        self.submit_btn.setEnabled(True)
+        self.next_btn.setEnabled(True)
+        self.generate_new_question()
         self.achievement_system.update_stat("quickmath_games_played")
 
     def generate_new_question(self):
-        """生成新的问题"""
+        """生成新题目"""
+        self.time_left = 10  # 重置时间（简单难度10秒）
+        self.timer_label.setText(f"剩余时间: {self.time_left}秒")
+        self.answer_input.clear()
+        self.feedback_label.setText("")
+
+        # 生成题目
         question, _ = self.game.generate_question()
         self.question_label.setText(question)
 
-    def check_answer(self):
-        """检查答案"""
-        user_answer = self.answer_input.text().strip()
-        if not user_answer:
-            return
-
-        is_correct = self.game.check_answer(user_answer)
-
-        if is_correct:
-            self.feedback_label.setText("正确! 真棒!")
-            self.feedback_label.setStyleSheet("color: #2ecc71; text-align: center;")
-            self.correct_count += 1
-            # 更新成就系统
-            self.achievement_system.update_stat("quickmath_correct_answers")
-        else:
-            self.feedback_label.setText(f"错误! 正确答案是 {self.game.get_correct_answer()}")
-            self.feedback_label.setStyleSheet("color: #e74c3c; text-align: center;")
-            self.incorrect_count += 1
-
-        # 更新分数
-        self.score_label.setText(f"正确: {self.correct_count} | 错误: {self.incorrect_count}")
-
-        # 生成新问题
-        self.generate_new_question()
-        self.answer_input.clear()
+        # 启动计时器
+        self.timer.start(1000)  # 每秒刷新一次
 
     def update_timer(self):
         """更新计时器"""
-        self.time_remaining -= 1
-        self.time_label.setText(f"剩余时间: {self.time_remaining}秒")
+        self.time_left -= 1
+        self.timer_label.setText(f"剩余时间: {self.time_left}秒")
 
-        # 时间到
-        if self.time_remaining <= 0:
+        if self.time_left <= 0:
             self.timer.stop()
-            self.answer_input.setEnabled(False)
+            self.feedback_label.setText(f"时间到！正确答案是: {self.game.get_correct_answer()}")
+            self.feedback_label.setStyleSheet("color: #e74c3c;")
             self.submit_btn.setEnabled(False)
-            self.start_btn.setEnabled(True)
-            self.start_btn.setText("再来一次")
 
-            # 显示结果
-            QMessageBox.information(
-                self,
-                "挑战结束",
-                f"时间到!\n正确: {self.correct_count}题\n错误: {self.incorrect_count}题"
-            )
+    def check_answer(self):
+        """检查答案"""
+        if self.time_left <= 0:
+            return
 
-    def keyPressEvent(self, event):
-        """处理键盘事件"""
-        if event.key() == Qt.Key_Return and self.answer_input.isEnabled():
-            self.check_answer()
+        self.timer.stop()
+        user_answer = self.answer_input.text().strip()
+
+        if not user_answer:
+            self.feedback_label.setText("请输入答案！")
+            self.feedback_label.setStyleSheet("color: #f39c12;")
+            return
+
+        if self.game.check_answer(user_answer):
+            # 答案正确
+            self.feedback_label.setText("正确！太棒了！")
+            self.feedback_label.setStyleSheet("color: #2ecc71;")
+            self.score += 10 * self.game.difficulty  # 分数与难度挂钩
+            self.score_label.setText(f"当前分数: {self.score}")
+            self.achievement_system.update_stat("quickmath_games_won")
         else:
-            super().keyPressEvent(event)
+            # 答案错误
+            self.feedback_label.setText(f"不正确，正确答案是: {self.game.get_correct_answer()}")
+            self.feedback_label.setStyleSheet("color: #e74c3c;")
+
+        self.submit_btn.setEnabled(False)
